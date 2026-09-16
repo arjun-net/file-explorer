@@ -4,7 +4,7 @@
   "description": "A fast, native-feeling desktop file explorer built with Electron and React.",
   "author": "arjun2",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "main": "dist-electron/main.cjs",
   "scripts": {
@@ -52,8 +52,10 @@
       "target": [
         "dmg",
         "zip"
-      ]
+      ],
+      "identity": null
     },
+    "afterPack": "scripts/afterPack.cjs",
     "directories": {
       "output": "release"
     }
