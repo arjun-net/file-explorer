@@ -2,7 +2,6 @@ import { ipcMain, shell, dialog, app, BrowserWindow } from "electron";
 import fs from "node:fs/promises";
 import fssync from "node:fs";
 import path from "node:path";
-import trash from "trash";
 import {
   listDir,
   statToEntry,
@@ -43,7 +42,9 @@ export function registerIpcHandlers() {
   ipcMain.handle("fs:rename", (_e, fullPath: string, newName: string) => renameEntry(fullPath, newName));
 
   ipcMain.handle("fs:delete", async (_e, paths: string[]) => {
-    await trash(paths);
+    for (const p of paths) {
+      await shell.trashItem(p);
+    }
   });
 
   ipcMain.handle("fs:copy", async (_e, srcPaths: string[], destDir: string) => {
