@@ -1,10 +1,10 @@
 {
   "name": "file-explorer",
   "productName": "Files",
-  "description": "A fast, native-feeling desktop file explorer built with Electron and React.",
+  "description": "An agentic file explorer: browse normally, or describe what you're looking for and let an LLM agent search by name, metadata, and photo/video content.",
   "author": "arjun2",
   "private": true,
-  "version": "0.1.1",
+  "version": "2.0.0",
   "type": "module",
   "main": "dist-electron/main.cjs",
   "scripts": {
