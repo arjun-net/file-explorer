@@ -3,6 +3,7 @@ import { Sidebar } from "./components/Sidebar";
 import { Toolbar } from "./components/Toolbar";
 import { FileView } from "./components/FileView";
 import { PreviewPanel } from "./components/PreviewPanel";
+import { SmartSearchPanel } from "./components/SmartSearchPanel";
 import { StatusBar } from "./components/StatusBar";
 import { ContextMenu, MenuIcons, type MenuAction } from "./components/ContextMenu";
 import { useHistory } from "./hooks/useHistory";
@@ -63,6 +64,7 @@ export default function App() {
 
   const [searchQuery, setSearchQuery] = useState("");
   const [searchMode, setSearchMode] = useState(false);
+  const [smartSearchOpen, setSmartSearchOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -606,6 +608,8 @@ export default function App() {
             onToggleTheme={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
             previewVisible={previewVisible}
             onTogglePreview={() => setPreviewVisible((v) => !v)}
+            smartSearchOpen={smartSearchOpen}
+            onToggleSmartSearch={() => setSmartSearchOpen((v) => !v)}
           />
 
           {notice && (
@@ -614,7 +618,21 @@ export default function App() {
             </div>
           )}
 
-          {dirListing.loading && !searchMode ? (
+          {smartSearchOpen ? (
+            <SmartSearchPanel
+              currentPath={history.currentPath}
+              onNavigateToResult={(path, isDirectory) => {
+                setSmartSearchOpen(false);
+                if (searchMode) exitSearch();
+                if (isDirectory) {
+                  history.navigate(path);
+                } else {
+                  history.navigate(dirname(path, sep!));
+                  setSelected(new Set([path]));
+                }
+              }}
+            />
+          ) : dirListing.loading && !searchMode ? (
             <div className="loading-splash inline">
               <div className="loading-spinner" />
             </div>

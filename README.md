@@ -1,6 +1,6 @@
 # Files
 
-A fast, native desktop file explorer built with Electron, React, and TypeScript.
+A fast, native desktop file explorer built with Electron, React, and TypeScript — growing into an agentic search tool for large drives. See **[ARCHITECTURE.md](ARCHITECTURE.md)** for how the indexing/search layer is built and what's next.
 
 ## Features
 
@@ -12,6 +12,7 @@ A fast, native desktop file explorer built with Electron, React, and TypeScript.
 - Preview panel with image/text preview and file metadata
 - Full keyboard shortcuts (⌘C/X/V, ⌘A, Delete, F2 rename, ⌘⇧N new folder, ⌘F search, ⌘[/⌘] back/forward, arrow-key navigation)
 - Light/dark theme with system detection, and persisted view preferences
+- **Indexed search** (toolbar database icon): index a folder into a local SQLite FTS5 database — including EXIF metadata for photos — for instant substring search, kept current automatically as files change. Foundation for the agentic search described in [ARCHITECTURE.md](ARCHITECTURE.md); an LLM search agent and content-based media search (CLIP embeddings) are the next phases, not yet built.
 
 ## Install
 

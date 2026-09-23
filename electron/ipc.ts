@@ -15,6 +15,8 @@ import {
   moveEntries,
 } from "./fsUtils";
 import { runSearch, cancelSearch } from "./search";
+import type { SearchIndex } from "./indexer";
+import type { KeywordSearchParams, MetadataSearchParams } from "./indexer/tools";
 
 const watchers = new Map<number, fssync.FSWatcher>();
 
@@ -26,7 +28,7 @@ function debounce<T extends (...args: any[]) => void>(fn: T, ms: number): T {
   }) as T;
 }
 
-export function registerIpcHandlers() {
+export function registerIpcHandlers(searchIndex: SearchIndex) {
   ipcMain.handle("fs:listDir", (_e, dirPath: string) => listDir(dirPath));
   ipcMain.handle("fs:stat", (_e, p: string) => statToEntry(p));
   ipcMain.handle("fs:getHome", () => getHome());
@@ -126,6 +128,15 @@ export function registerIpcHandlers() {
 
   ipcMain.handle("app:getVersion", () => app.getVersion());
   ipcMain.handle("app:getPathSeparator", () => path.sep);
+
+  ipcMain.handle("index:addRoot", (_e, rootPath: string) => searchIndex.addRoot(rootPath));
+  ipcMain.handle("index:removeRoot", (_e, rootPath: string) => searchIndex.removeRoot(rootPath));
+  ipcMain.handle("index:getStatus", () => searchIndex.getStatus());
+  ipcMain.handle("index:getStats", () => searchIndex.getStats());
+  ipcMain.handle("index:keywordSearch", (_e, params: KeywordSearchParams) => searchIndex.keywordSearch(params));
+  ipcMain.handle("index:metadataSearch", (_e, params: MetadataSearchParams) => searchIndex.metadataSearch(params));
+  ipcMain.handle("index:getDirRollup", (_e, dirPath: string) => searchIndex.getDirRollup(dirPath));
+  ipcMain.handle("index:listSubdirRollups", (_e, dirPath: string) => searchIndex.listSubdirRollups(dirPath));
 }
 
 export function cleanupWatchers(winId: number) {

@@ -2,6 +2,8 @@ import { app, BrowserWindow, protocol, net, Menu } from "electron";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { registerIpcHandlers, cleanupWatchers } from "./ipc";
+import { SearchIndex, type IndexStatus } from "./indexer";
+import { getDefaultDbPath } from "./indexer/db";
 
 const isDev = !!process.env.VITE_DEV_SERVER_URL;
 
@@ -47,8 +49,6 @@ app.whenReady().then(() => {
     return net.fetch(pathToFileURL(filePath).href);
   });
 
-  registerIpcHandlers();
-
   if (process.platform === "darwin") {
     Menu.setApplicationMenu(
       Menu.buildFromTemplate([
@@ -88,7 +88,15 @@ app.whenReady().then(() => {
     );
   }
 
-  createWindow();
+  const win = createWindow();
+
+  const searchIndex = new SearchIndex(getDefaultDbPath(app.getPath("userData")), (status: IndexStatus) => {
+    if (!win.isDestroyed()) win.webContents.send("index:statusChanged", status);
+  });
+
+  registerIpcHandlers(searchIndex);
+
+  app.on("before-quit", () => searchIndex.close());
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

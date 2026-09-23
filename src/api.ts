@@ -1,6 +1,28 @@
-import type { FileEntry, VolumeInfo, QuickAccessEntry, SearchResult } from "../shared/types";
+import type {
+  FileEntry,
+  VolumeInfo,
+  QuickAccessEntry,
+  SearchResult,
+  IndexStatus,
+  IndexedFile,
+  DirRollup,
+  KeywordSearchParams,
+  MetadataSearchParams,
+  IndexStats,
+} from "../shared/types";
 
-export type { FileEntry, VolumeInfo, QuickAccessEntry, SearchResult };
+export type {
+  FileEntry,
+  VolumeInfo,
+  QuickAccessEntry,
+  SearchResult,
+  IndexStatus,
+  IndexedFile,
+  DirRollup,
+  KeywordSearchParams,
+  MetadataSearchParams,
+  IndexStats,
+};
 
 export interface FileAPI {
   listDir(dirPath: string): Promise<FileEntry[]>;
@@ -32,6 +54,16 @@ export interface FileAPI {
 
   getVersion(): Promise<string>;
   getPathSeparator(): Promise<string>;
+
+  indexAddRoot(rootPath: string): Promise<void>;
+  indexRemoveRoot(rootPath: string): Promise<void>;
+  indexGetStatus(): Promise<IndexStatus>;
+  indexGetStats(): Promise<IndexStats>;
+  indexKeywordSearch(params: KeywordSearchParams): Promise<IndexedFile[]>;
+  indexMetadataSearch(params: MetadataSearchParams): Promise<IndexedFile[]>;
+  indexGetDirRollup(dirPath: string): Promise<DirRollup | null>;
+  indexListSubdirRollups(dirPath: string): Promise<DirRollup[]>;
+  onIndexStatusChanged(cb: (status: IndexStatus) => void): () => void;
 }
 
 declare global {

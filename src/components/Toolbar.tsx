@@ -13,6 +13,7 @@ import {
   PanelRight,
   EyeOff,
   Eye,
+  Database,
 } from "lucide-react";
 import { Breadcrumbs } from "./Breadcrumbs";
 import type { SortDir, SortKey, ViewMode } from "../types";
@@ -46,6 +47,8 @@ interface ToolbarProps {
   onToggleTheme: () => void;
   previewVisible: boolean;
   onTogglePreview: () => void;
+  smartSearchOpen: boolean;
+  onToggleSmartSearch: () => void;
 }
 
 export function Toolbar(props: ToolbarProps) {
@@ -78,6 +81,8 @@ export function Toolbar(props: ToolbarProps) {
     onToggleTheme,
     previewVisible,
     onTogglePreview,
+    smartSearchOpen,
+    onToggleSmartSearch,
   } = props;
 
   return (
@@ -171,6 +176,14 @@ export function Toolbar(props: ToolbarProps) {
 
         <button className="icon-btn" onClick={onToggleHidden} title="Toggle hidden files">
           {showHidden ? <Eye size={15} /> : <EyeOff size={15} />}
+        </button>
+
+        <button
+          className={`icon-btn${smartSearchOpen ? " active" : ""}`}
+          onClick={onToggleSmartSearch}
+          title="Indexed search"
+        >
+          <Database size={15} />
         </button>
 
         <div className="toolbar-spacer" />

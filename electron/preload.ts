@@ -1,5 +1,16 @@
 import { contextBridge, ipcRenderer, webUtils } from "electron";
-import type { FileEntry, VolumeInfo, QuickAccessEntry, SearchResult } from "../shared/types";
+import type {
+  FileEntry,
+  VolumeInfo,
+  QuickAccessEntry,
+  SearchResult,
+  IndexStatus,
+  IndexedFile,
+  DirRollup,
+  KeywordSearchParams,
+  MetadataSearchParams,
+  IndexStats,
+} from "../shared/types";
 
 const api = {
   listDir: (dirPath: string): Promise<FileEntry[]> => ipcRenderer.invoke("fs:listDir", dirPath),
@@ -50,6 +61,24 @@ const api = {
 
   getVersion: (): Promise<string> => ipcRenderer.invoke("app:getVersion"),
   getPathSeparator: (): Promise<string> => ipcRenderer.invoke("app:getPathSeparator"),
+
+  indexAddRoot: (rootPath: string): Promise<void> => ipcRenderer.invoke("index:addRoot", rootPath),
+  indexRemoveRoot: (rootPath: string): Promise<void> => ipcRenderer.invoke("index:removeRoot", rootPath),
+  indexGetStatus: (): Promise<IndexStatus> => ipcRenderer.invoke("index:getStatus"),
+  indexGetStats: (): Promise<IndexStats> => ipcRenderer.invoke("index:getStats"),
+  indexKeywordSearch: (params: KeywordSearchParams): Promise<IndexedFile[]> =>
+    ipcRenderer.invoke("index:keywordSearch", params),
+  indexMetadataSearch: (params: MetadataSearchParams): Promise<IndexedFile[]> =>
+    ipcRenderer.invoke("index:metadataSearch", params),
+  indexGetDirRollup: (dirPath: string): Promise<DirRollup | null> =>
+    ipcRenderer.invoke("index:getDirRollup", dirPath),
+  indexListSubdirRollups: (dirPath: string): Promise<DirRollup[]> =>
+    ipcRenderer.invoke("index:listSubdirRollups", dirPath),
+  onIndexStatusChanged: (cb: (status: IndexStatus) => void) => {
+    const listener = (_e: unknown, data: IndexStatus) => cb(data);
+    ipcRenderer.on("index:statusChanged", listener);
+    return () => ipcRenderer.removeListener("index:statusChanged", listener);
+  },
 };
 
 contextBridge.exposeInMainWorld("fileAPI", api);
