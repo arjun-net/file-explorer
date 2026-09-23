@@ -108,6 +108,21 @@ currentPath}`), not per-file, so a fast SSD scan doesn't flood IPC.
 
 ### Keeping it current (`watcher.ts` + `incremental.ts`)
 
+### Always on
+
+The watcher is not tied to the "Index This Folder" click. On every launch,
+`SearchIndex.resume()` re-attaches a watcher to **every** row in `index_roots`
+and queues a catch-up walk for each, which repairs anything that changed while
+the app was closed (the walk is cheap for unchanged files — upserts are
+guarded by mtime/size). While the app runs, each watcher rescan also schedules
+an embed-only pass (debounced 3s) so new photos and videos become searchable
+by content without any manual step.
+
+Background work goes through a small queue in `SearchIndex` — one root at a
+time, walk then embed — because there is a single CLIP model in memory. A
+user-initiated "Index This Folder" jumps the queue and the interrupted job is
+re-queued.
+
 ### What gets skipped
 
 `ignore.ts` is the single source of truth for what stays out of the index,

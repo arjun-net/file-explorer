@@ -117,6 +117,8 @@ app.whenReady().then(() => {
 
   const settings = new SettingsStore(app.getPath("userData"));
   registerIpcHandlers(searchIndex, settings);
+  // Re-attach live watching to every indexed folder and catch up on changes made while closed.
+  searchIndex.resume();
 
   app.on("before-quit", () => searchIndex.close());
 

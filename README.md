@@ -12,7 +12,7 @@ A fast, native desktop file explorer built with Electron, React, and TypeScript 
 - Preview panel with image/text preview and file metadata
 - Full keyboard shortcuts (⌘C/X/V, ⌘A, Delete, F2 rename, ⌘⇧N new folder, ⌘F search, ⌘[/⌘] back/forward, arrow-key navigation)
 - Light/dark theme with system detection, and persisted view preferences
-- **Indexed search** (toolbar database icon): index a folder into a local SQLite FTS5 database — including EXIF metadata for photos — for instant substring search, kept current automatically as files change.
+- **Indexed search** (toolbar database icon): index a folder into a local SQLite FTS5 database — including EXIF metadata for photos — for instant substring search, kept current automatically: indexed folders are re-watched on every launch (catching up on changes made while the app was closed), and new photos and videos are embedded for content search as they arrive.
 - **Content search**: photos and videos get embedded locally with CLIP, so you can search by what's actually *in* them ("dog on a beach") instead of the filename. Runs fully on-device, no API calls.
 - **Ask** (the agent): describe what you want in plain language and an LLM decides for itself how to search — by name, by content, by size/date, checking folder summaries before diving into subfolders on large drives. Needs an Anthropic API key, added once via the Settings (gear icon) panel — stored encrypted, locally, via the OS keychain, never sent anywhere but Anthropic's API.
 
