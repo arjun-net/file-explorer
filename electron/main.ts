@@ -1,4 +1,4 @@
-import { app, BrowserWindow, protocol, net, Menu } from "electron";
+import { app, BrowserWindow, protocol, net, Menu, nativeImage } from "electron";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { registerIpcHandlers, cleanupWatchers } from "./ipc";
@@ -7,6 +7,13 @@ import { getDefaultDbPath } from "./indexer/db";
 import { SettingsStore } from "./settings";
 
 const isDev = !!process.env.VITE_DEV_SERVER_URL;
+
+// The packaged app gets its icon from electron-builder (build-assets/icon.icns).
+// In dev, Electron would otherwise show its own default icon in the Dock.
+if (isDev && process.platform === "darwin") {
+  const icon = nativeImage.createFromPath(path.join(__dirname, "../build-assets/AppIcon.iconset/icon_512x512.png"));
+  if (!icon.isEmpty()) app.dock?.setIcon(icon);
+}
 
 protocol.registerSchemesAsPrivileged([
   { scheme: "localfile", privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } },
@@ -21,6 +28,12 @@ function createWindow() {
     titleBarStyle: "hiddenInset",
     trafficLightPosition: { x: 16, y: 16 },
     backgroundColor: "#1e1f22",
+    // Native frosted-glass sidebar (macOS only; ignored elsewhere). Only
+    // shows through where the page's own CSS leaves the sidebar/titlebar
+    // background transparent — the main content pane stays opaque for
+    // legibility.
+    vibrancy: "sidebar",
+    visualEffectState: "active",
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,

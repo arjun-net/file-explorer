@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#4f7dff"/>
+      <stop offset="55%" stop-color="#7c5cf0"/>
+      <stop offset="100%" stop-color="#9b3fe0"/>
+    </linearGradient>
+    <radialGradient id="sheen" cx="30%" cy="16%" r="75%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.32"/>
+      <stop offset="45%" stop-color="#ffffff" stop-opacity="0.06"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="tabShade" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#000000" stop-opacity="0.10"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="spark" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#fff6d8"/>
+      <stop offset="100%" stop-color="#ffcf55"/>
+    </linearGradient>
+    <filter id="softShadow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="20" stdDeviation="24" flood-color="#1a1040" flood-opacity="0.38"/>
+    </filter>
+    <filter id="sparkGlow" x="-80%" y="-80%" width="260%" height="260%">
+      <feDropShadow dx="0" dy="0" stdDeviation="14" flood-color="#ffb800" flood-opacity="0.55"/>
+    </filter>
+  </defs>
+
+  <!-- background squircle -->
+  <rect x="0" y="0" width="1024" height="1024" rx="228" fill="url(#bg)"/>
+  <rect x="0" y="0" width="1024" height="1024" rx="228" fill="url(#sheen)"/>
+
+  <!-- folder -->
+  <g filter="url(#softShadow)">
+    <rect x="168" y="378" width="260" height="94" rx="32" fill="#ffffff"/>
+    <rect x="168" y="440" width="688" height="404" rx="56" fill="#ffffff"/>
+    <rect x="168" y="440" width="688" height="76" rx="28" fill="url(#tabShade)"/>
+  </g>
+
+  <!-- sparkle -->
+  <g filter="url(#sparkGlow)">
+    <path fill="url(#spark)" d="M800,74 L825.6,183.4 L936,210 L825.6,236.6 L800,346 L774.4,236.6 L664,210 L774.4,183.4 Z"/>
+  </g>
+</svg>
