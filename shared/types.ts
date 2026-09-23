@@ -108,3 +108,19 @@ export interface EmbedStatus {
   currentPath?: string;
   error?: string;
 }
+
+export interface AgentStep {
+  type: "tool_call" | "tool_result" | "text" | "done" | "error";
+  tool?: string;
+  input?: Record<string, unknown>;
+  preview?: string;
+  text?: string;
+  summary?: string;
+  files?: { path: string; reason: string }[];
+  error?: string;
+}
+
+export interface AgentStepEvent {
+  requestId: string;
+  step: AgentStep;
+}

@@ -12,6 +12,8 @@ import type {
   VectorSearchParams,
   VectorSearchResult,
   IndexStats,
+  AgentStep,
+  AgentStepEvent,
 } from "../shared/types";
 
 export type {
@@ -28,6 +30,8 @@ export type {
   VectorSearchParams,
   VectorSearchResult,
   IndexStats,
+  AgentStep,
+  AgentStepEvent,
 };
 
 export interface FileAPI {
@@ -73,6 +77,14 @@ export interface FileAPI {
   indexGetEmbedStatus(): Promise<EmbedStatus>;
   onIndexStatusChanged(cb: (status: IndexStatus) => void): () => void;
   onIndexEmbedStatusChanged(cb: (status: EmbedStatus) => void): () => void;
+
+  settingsSetApiKey(key: string): Promise<void>;
+  settingsHasApiKey(): Promise<boolean>;
+  settingsClearApiKey(): Promise<void>;
+
+  agentQuery(requestId: string, query: string, currentPath: string): Promise<void>;
+  agentCancel(requestId: string): Promise<void>;
+  onAgentStep(cb: (event: AgentStepEvent) => void): () => void;
 }
 
 declare global {

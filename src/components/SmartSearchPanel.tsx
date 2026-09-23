@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
-import { Database, Loader2, Search, Sparkles, X } from "lucide-react";
-import type { EmbedStatus, IndexedFile, IndexStats, IndexStatus, VectorSearchResult } from "../api";
+import { useEffect, useRef, useState } from "react";
+import { Database, Loader2, Search, Sparkles, Wand2, X } from "lucide-react";
+import type { AgentStep, EmbedStatus, IndexedFile, IndexStats, IndexStatus, VectorSearchResult } from "../api";
 import { iconForEntry } from "../utils/fileIcon";
 import { formatBytes, formatDate } from "../utils/format";
 
@@ -9,25 +9,71 @@ interface SmartSearchPanelProps {
   onNavigateToResult: (path: string, isDirectory: boolean) => void;
 }
 
-type Mode = "name" | "content";
+type Mode = "name" | "content" | "ask";
 type ResultRow = IndexedFile & Partial<Pick<VectorSearchResult, "similarity" | "matchedFrameTime" | "matchedKind">>;
 
+const TOOL_LABELS: Record<string, string> = {
+  keyword_search: "Searching by name",
+  content_search: "Searching by content",
+  metadata_search: "Filtering by size/type/date",
+  list_subdir_rollups: "Checking subfolders",
+  get_dir_rollup: "Checking folder",
+};
+
+function describeToolCall(step: AgentStep): string {
+  const label = TOOL_LABELS[step.tool ?? ""] ?? step.tool ?? "Working";
+  const input = step.input ?? {};
+  const focus = (input.query as string) ?? (input.dirPath as string) ?? "";
+  return focus ? `${label}: "${focus}"` : label;
+}
+
+function ResultRowView({ entry, onClick }: { entry: ResultRow; onClick: () => void }) {
+  const Icon = iconForEntry({ isDirectory: entry.isDirectory, extension: entry.extension });
+  return (
+    <button className="smart-search-result" onClick={onClick}>
+      <Icon size={17} strokeWidth={1.5} />
+      <div className="smart-search-result-text">
+        <div className="smart-search-result-name">{entry.name}</div>
+        <div className="smart-search-result-path">
+          {entry.parentDir}
+          {entry.matchedKind === "video_frame" && entry.matchedFrameTime != null && (
+            <span className="smart-search-frame-badge">@{Math.round(entry.matchedFrameTime)}s</span>
+          )}
+        </div>
+      </div>
+      <div className="smart-search-result-meta">
+        {entry.similarity != null ? (
+          <span>{Math.round(entry.similarity * 100)}% match</span>
+        ) : !entry.isDirectory ? (
+          <span>{formatBytes(entry.size)}</span>
+        ) : null}
+        <span>{formatDate(entry.mtime)}</span>
+      </div>
+    </button>
+  );
+}
+
 /**
- * The foundation for the "agentic" search experience: index the current
- * folder (SQLite FTS5 for names/metadata, CLIP embeddings for image/video
- * content), then search it instantly. This search box is a stand-in for the
- * eventual LLM agent (which will call the same keyword/metadata/vector/
- * rollup tools this panel already exercises, deciding for itself which to
- * call, rather than the user picking a mode by hand). See ARCHITECTURE.md.
+ * Indexed search, in three modes:
+ *  - Name / Content: direct manual access to keyword and CLIP vector search.
+ *  - Ask: the actual agent — a natural-language query drives an LLM
+ *    tool-calling loop over the same keyword/content/metadata/rollup tools,
+ *    deciding for itself how to search. See ARCHITECTURE.md.
  */
 export function SmartSearchPanel({ currentPath, onNavigateToResult }: SmartSearchPanelProps) {
   const [status, setStatus] = useState<IndexStatus | null>(null);
   const [embedStatus, setEmbedStatus] = useState<EmbedStatus | null>(null);
   const [stats, setStats] = useState<IndexStats | null>(null);
-  const [mode, setMode] = useState<Mode>("name");
+  const [mode, setMode] = useState<Mode>("ask");
+
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<ResultRow[]>([]);
   const [searching, setSearching] = useState(false);
+
+  const [askInput, setAskInput] = useState("");
+  const [askSteps, setAskSteps] = useState<AgentStep[]>([]);
+  const [askRunning, setAskRunning] = useState(false);
+  const askRequestId = useRef<string | null>(null);
 
   useEffect(() => {
     window.fileAPI.indexGetStatus().then(setStatus);
@@ -38,13 +84,20 @@ export function SmartSearchPanel({ currentPath, onNavigateToResult }: SmartSearc
       if (s.state === "done") window.fileAPI.indexGetStats().then(setStats);
     });
     const unsubEmbed = window.fileAPI.onIndexEmbedStatusChanged(setEmbedStatus);
+    const unsubAgent = window.fileAPI.onAgentStep(({ requestId, step }) => {
+      if (requestId !== askRequestId.current) return;
+      setAskSteps((prev) => [...prev, step]);
+      if (step.type === "done" || step.type === "error") setAskRunning(false);
+    });
     return () => {
       unsubIndex();
       unsubEmbed();
+      unsubAgent();
     };
   }, []);
 
   useEffect(() => {
+    if (mode === "ask") return;
     const trimmed = query.trim();
     if (!trimmed) {
       setResults([]);
@@ -71,9 +124,21 @@ export function SmartSearchPanel({ currentPath, onNavigateToResult }: SmartSearc
     };
   }, [query, mode]);
 
+  function submitAsk() {
+    const trimmed = askInput.trim();
+    if (!trimmed || askRunning) return;
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    askRequestId.current = id;
+    setAskSteps([]);
+    setAskRunning(true);
+    window.fileAPI.agentQuery(id, trimmed, currentPath);
+  }
+
   const isIndexed = stats?.indexedRoots.some((root) => currentPath === root || currentPath.startsWith(root + "/"));
   const scanning = status?.state === "scanning";
   const embedding = embedStatus?.state === "embedding";
+  const doneStep = askSteps.find((s) => s.type === "done");
+  const errorStep = askSteps.find((s) => s.type === "error");
 
   return (
     <div className="smart-search-panel">
@@ -100,6 +165,10 @@ export function SmartSearchPanel({ currentPath, onNavigateToResult }: SmartSearc
       </div>
 
       <div className="smart-search-mode">
+        <button className={mode === "ask" ? "active" : ""} onClick={() => setMode("ask")}>
+          <Wand2 size={13} />
+          Ask
+        </button>
         <button className={mode === "name" ? "active" : ""} onClick={() => setMode("name")}>
           <Search size={13} />
           Name
@@ -110,66 +179,107 @@ export function SmartSearchPanel({ currentPath, onNavigateToResult }: SmartSearc
         </button>
       </div>
 
-      <div className="smart-search-box">
-        <Search size={14} />
-        <input
-          autoFocus
-          placeholder={mode === "name" ? "Search indexed files by name…" : "Describe what's in the image or video…"}
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-        />
-        {query && (
-          <button onClick={() => setQuery("")}>
-            <X size={13} />
-          </button>
-        )}
-      </div>
-
-      <div className="smart-search-results">
-        {!query.trim() ? (
-          <div className="smart-search-empty">
-            {mode === "content"
-              ? "Search photos and videos by what's actually in them — e.g. \"dog on a beach\" — not their filenames."
-              : stats && stats.indexedRoots.length > 0
-                ? "Type to search everything that's been indexed."
-                : "Index a folder above, then search it instantly — including subfolders you haven't opened yet."}
-          </div>
-        ) : searching ? (
-          <div className="smart-search-empty">Searching…</div>
-        ) : results.length === 0 ? (
-          <div className="smart-search-empty">No matches for "{query}".</div>
-        ) : (
-          results.map((entry) => {
-            const Icon = iconForEntry({ isDirectory: entry.isDirectory, extension: entry.extension });
-            return (
-              <button
-                key={entry.id}
-                className="smart-search-result"
-                onClick={() => onNavigateToResult(entry.path, entry.isDirectory)}
-              >
-                <Icon size={17} strokeWidth={1.5} />
-                <div className="smart-search-result-text">
-                  <div className="smart-search-result-name">{entry.name}</div>
-                  <div className="smart-search-result-path">
-                    {entry.parentDir}
-                    {entry.matchedKind === "video_frame" && entry.matchedFrameTime != null && (
-                      <span className="smart-search-frame-badge">@{Math.round(entry.matchedFrameTime)}s</span>
-                    )}
-                  </div>
-                </div>
-                <div className="smart-search-result-meta">
-                  {entry.similarity != null ? (
-                    <span>{Math.round(entry.similarity * 100)}% match</span>
-                  ) : !entry.isDirectory ? (
-                    <span>{formatBytes(entry.size)}</span>
-                  ) : null}
-                  <span>{formatDate(entry.mtime)}</span>
-                </div>
+      {mode === "ask" ? (
+        <>
+          <div className="smart-search-box">
+            <Wand2 size={14} />
+            <input
+              autoFocus
+              placeholder="Describe what you're looking for…"
+              value={askInput}
+              onChange={(e) => setAskInput(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && submitAsk()}
+              disabled={askRunning}
+            />
+            {askInput && !askRunning && (
+              <button onClick={() => setAskInput("")}>
+                <X size={13} />
               </button>
-            );
-          })
-        )}
-      </div>
+            )}
+          </div>
+
+          <div className="smart-search-results">
+            {askSteps.length === 0 ? (
+              <div className="smart-search-empty">
+                Describe what you're looking for in plain language — the agent decides how to search (by name, by
+                content, by folder) on its own.
+              </div>
+            ) : (
+              <div className="ask-transcript">
+                {askSteps
+                  .filter((s) => s.type !== "done")
+                  .map((step, i) => (
+                    <div key={i} className={`ask-step ask-step-${step.type}`}>
+                      {step.type === "tool_call" && <span>{describeToolCall(step)}</span>}
+                      {step.type === "tool_result" && <span className="ask-step-muted">→ {step.preview}</span>}
+                      {step.type === "text" && <span>{step.text}</span>}
+                      {step.type === "error" && <span>⚠ {step.error}</span>}
+                    </div>
+                  ))}
+                {askRunning && <Loader2 size={14} className="smart-search-spin ask-step-spinner" />}
+
+                {doneStep && (
+                  <div className="ask-summary">{doneStep.summary}</div>
+                )}
+                {errorStep && errorStep.error?.includes("API key") && (
+                  <div className="ask-summary ask-summary-error">
+                    Open Settings (gear icon in the toolbar) to add an Anthropic API key.
+                  </div>
+                )}
+                {doneStep?.files?.map((f) => (
+                  <button
+                    key={f.path}
+                    className="smart-search-result"
+                    onClick={() => onNavigateToResult(f.path, false)}
+                  >
+                    <div className="smart-search-result-text">
+                      <div className="smart-search-result-name">{f.path.split("/").pop()}</div>
+                      <div className="smart-search-result-path">{f.reason}</div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="smart-search-box">
+            <Search size={14} />
+            <input
+              autoFocus
+              placeholder={mode === "name" ? "Search indexed files by name…" : "Describe what's in the image or video…"}
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+            {query && (
+              <button onClick={() => setQuery("")}>
+                <X size={13} />
+              </button>
+            )}
+          </div>
+
+          <div className="smart-search-results">
+            {!query.trim() ? (
+              <div className="smart-search-empty">
+                {mode === "content"
+                  ? "Search photos and videos by what's actually in them — e.g. \"dog on a beach\" — not their filenames."
+                  : stats && stats.indexedRoots.length > 0
+                    ? "Type to search everything that's been indexed."
+                    : "Index a folder above, then search it instantly — including subfolders you haven't opened yet."}
+              </div>
+            ) : searching ? (
+              <div className="smart-search-empty">Searching…</div>
+            ) : results.length === 0 ? (
+              <div className="smart-search-empty">No matches for "{query}".</div>
+            ) : (
+              results.map((entry) => (
+                <ResultRowView key={entry.id} entry={entry} onClick={() => onNavigateToResult(entry.path, entry.isDirectory)} />
+              ))
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 }

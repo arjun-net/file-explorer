@@ -4,6 +4,7 @@ import { Toolbar } from "./components/Toolbar";
 import { FileView } from "./components/FileView";
 import { PreviewPanel } from "./components/PreviewPanel";
 import { SmartSearchPanel } from "./components/SmartSearchPanel";
+import { SettingsModal } from "./components/SettingsModal";
 import { StatusBar } from "./components/StatusBar";
 import { ContextMenu, MenuIcons, type MenuAction } from "./components/ContextMenu";
 import { useHistory } from "./hooks/useHistory";
@@ -65,6 +66,7 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchMode, setSearchMode] = useState(false);
   const [smartSearchOpen, setSmartSearchOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -610,6 +612,7 @@ export default function App() {
             onTogglePreview={() => setPreviewVisible((v) => !v)}
             smartSearchOpen={smartSearchOpen}
             onToggleSmartSearch={() => setSmartSearchOpen((v) => !v)}
+            onOpenSettings={() => setSettingsOpen(true)}
           />
 
           {notice && (
@@ -678,6 +681,7 @@ export default function App() {
       {contextMenu && (
         <ContextMenu x={contextMenu.x} y={contextMenu.y} actions={contextActions} onClose={() => setContextMenu(null)} />
       )}
+      {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}
     </div>
   );
 }

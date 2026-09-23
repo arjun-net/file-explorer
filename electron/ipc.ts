@@ -17,8 +17,11 @@ import {
 import { runSearch, cancelSearch } from "./search";
 import type { SearchIndex } from "./indexer";
 import type { KeywordSearchParams, MetadataSearchParams, VectorSearchParams } from "./indexer/tools";
+import type { SettingsStore } from "./settings";
+import { runAgent } from "./agent/agentLoop";
 
 const watchers = new Map<number, fssync.FSWatcher>();
+const activeAgentRuns = new Set<string>();
 
 function debounce<T extends (...args: any[]) => void>(fn: T, ms: number): T {
   let timer: NodeJS.Timeout | null = null;
@@ -28,7 +31,7 @@ function debounce<T extends (...args: any[]) => void>(fn: T, ms: number): T {
   }) as T;
 }
 
-export function registerIpcHandlers(searchIndex: SearchIndex) {
+export function registerIpcHandlers(searchIndex: SearchIndex, settings: SettingsStore) {
   ipcMain.handle("fs:listDir", (_e, dirPath: string) => listDir(dirPath));
   ipcMain.handle("fs:stat", (_e, p: string) => statToEntry(p));
   ipcMain.handle("fs:getHome", () => getHome());
@@ -139,6 +142,38 @@ export function registerIpcHandlers(searchIndex: SearchIndex) {
   ipcMain.handle("index:getDirRollup", (_e, dirPath: string) => searchIndex.getDirRollup(dirPath));
   ipcMain.handle("index:listSubdirRollups", (_e, dirPath: string) => searchIndex.listSubdirRollups(dirPath));
   ipcMain.handle("index:getEmbedStatus", () => searchIndex.getEmbedStatus());
+
+  ipcMain.handle("settings:setApiKey", (_e, key: string) => settings.setApiKey(key));
+  ipcMain.handle("settings:hasApiKey", () => settings.hasApiKey());
+  ipcMain.handle("settings:clearApiKey", () => settings.clearApiKey());
+
+  ipcMain.handle("agent:query", (e, requestId: string, query: string, currentPath: string) => {
+    const apiKey = settings.getApiKey();
+    if (!apiKey) {
+      e.sender.send("agent:step", {
+        requestId,
+        step: { type: "error", error: "No Anthropic API key configured. Add one in Settings." },
+      });
+      return;
+    }
+    activeAgentRuns.add(requestId);
+    runAgent(apiKey, query, currentPath, searchIndex, (step) => {
+      if (!activeAgentRuns.has(requestId) || e.sender.isDestroyed()) return;
+      e.sender.send("agent:step", { requestId, step });
+      if (step.type === "done" || step.type === "error") activeAgentRuns.delete(requestId);
+    }).catch((err: unknown) => {
+      if (!activeAgentRuns.has(requestId) || e.sender.isDestroyed()) return;
+      e.sender.send("agent:step", {
+        requestId,
+        step: { type: "error", error: err instanceof Error ? err.message : String(err) },
+      });
+      activeAgentRuns.delete(requestId);
+    });
+  });
+
+  ipcMain.handle("agent:cancel", (_e, requestId: string) => {
+    activeAgentRuns.delete(requestId);
+  });
 }
 
 export function cleanupWatchers(winId: number) {

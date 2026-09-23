@@ -13,6 +13,7 @@ import type {
   VectorSearchParams,
   VectorSearchResult,
   IndexStats,
+  AgentStepEvent,
 } from "../shared/types";
 
 const api = {
@@ -89,6 +90,19 @@ const api = {
     const listener = (_e: unknown, data: EmbedStatus) => cb(data);
     ipcRenderer.on("index:embedStatusChanged", listener);
     return () => ipcRenderer.removeListener("index:embedStatusChanged", listener);
+  },
+
+  settingsSetApiKey: (key: string): Promise<void> => ipcRenderer.invoke("settings:setApiKey", key),
+  settingsHasApiKey: (): Promise<boolean> => ipcRenderer.invoke("settings:hasApiKey"),
+  settingsClearApiKey: (): Promise<void> => ipcRenderer.invoke("settings:clearApiKey"),
+
+  agentQuery: (requestId: string, query: string, currentPath: string): Promise<void> =>
+    ipcRenderer.invoke("agent:query", requestId, query, currentPath),
+  agentCancel: (requestId: string): Promise<void> => ipcRenderer.invoke("agent:cancel", requestId),
+  onAgentStep: (cb: (event: AgentStepEvent) => void) => {
+    const listener = (_e: unknown, data: AgentStepEvent) => cb(data);
+    ipcRenderer.on("agent:step", listener);
+    return () => ipcRenderer.removeListener("agent:step", listener);
   },
 };
 

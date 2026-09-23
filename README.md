@@ -1,6 +1,6 @@
 # Files
 
-A fast, native desktop file explorer built with Electron, React, and TypeScript — growing into an agentic search tool for large drives. See **[ARCHITECTURE.md](ARCHITECTURE.md)** for how the indexing/search layer is built and what's next.
+A fast, native desktop file explorer built with Electron, React, and TypeScript — with an agentic search layer for large drives: describe what you're looking for in plain language, and an LLM agent searches by name, metadata, and photo/video *content* to find it. See **[ARCHITECTURE.md](ARCHITECTURE.md)** for how it's built.
 
 ## Features
 
@@ -13,7 +13,8 @@ A fast, native desktop file explorer built with Electron, React, and TypeScript 
 - Full keyboard shortcuts (⌘C/X/V, ⌘A, Delete, F2 rename, ⌘⇧N new folder, ⌘F search, ⌘[/⌘] back/forward, arrow-key navigation)
 - Light/dark theme with system detection, and persisted view preferences
 - **Indexed search** (toolbar database icon): index a folder into a local SQLite FTS5 database — including EXIF metadata for photos — for instant substring search, kept current automatically as files change.
-- **Content search**: photos and videos get embedded locally with CLIP, so you can search by what's actually *in* them ("dog on a beach") instead of the filename. Runs fully on-device, no API calls. Foundation for the agentic search described in [ARCHITECTURE.md](ARCHITECTURE.md); an LLM search agent that drives all of this itself is the next phase, not yet built.
+- **Content search**: photos and videos get embedded locally with CLIP, so you can search by what's actually *in* them ("dog on a beach") instead of the filename. Runs fully on-device, no API calls.
+- **Ask** (the agent): describe what you want in plain language and an LLM decides for itself how to search — by name, by content, by size/date, checking folder summaries before diving into subfolders on large drives. Needs an Anthropic API key, added once via the Settings (gear icon) panel — stored encrypted, locally, via the OS keychain, never sent anywhere but Anthropic's API.
 
 ## Install
 
@@ -39,4 +40,4 @@ npm run dist       # produces a .dmg and .zip in release/
 
 ## Stack
 
-Electron 44 · React 19 · TypeScript · Vite · esbuild (main/preload bundling) · electron-builder (packaging)
+Electron 44 · React 19 · TypeScript · Vite · esbuild (main/preload bundling) · electron-builder (packaging) · better-sqlite3 + sqlite-vec (FTS5 + vector search) · CLIP via `@huggingface/transformers`/onnxruntime-node · ffmpeg-static (video keyframes) · Anthropic SDK (search agent)

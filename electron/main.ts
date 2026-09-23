@@ -4,6 +4,7 @@ import { pathToFileURL } from "node:url";
 import { registerIpcHandlers, cleanupWatchers } from "./ipc";
 import { SearchIndex, type IndexStatus, type EmbedStatus } from "./indexer";
 import { getDefaultDbPath } from "./indexer/db";
+import { SettingsStore } from "./settings";
 
 const isDev = !!process.env.VITE_DEV_SERVER_URL;
 
@@ -101,7 +102,8 @@ app.whenReady().then(() => {
     }
   );
 
-  registerIpcHandlers(searchIndex);
+  const settings = new SettingsStore(app.getPath("userData"));
+  registerIpcHandlers(searchIndex, settings);
 
   app.on("before-quit", () => searchIndex.close());
 

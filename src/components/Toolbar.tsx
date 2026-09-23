@@ -14,6 +14,7 @@ import {
   EyeOff,
   Eye,
   Database,
+  Settings,
 } from "lucide-react";
 import { Breadcrumbs } from "./Breadcrumbs";
 import type { SortDir, SortKey, ViewMode } from "../types";
@@ -49,6 +50,7 @@ interface ToolbarProps {
   onTogglePreview: () => void;
   smartSearchOpen: boolean;
   onToggleSmartSearch: () => void;
+  onOpenSettings: () => void;
 }
 
 export function Toolbar(props: ToolbarProps) {
@@ -83,6 +85,7 @@ export function Toolbar(props: ToolbarProps) {
     onTogglePreview,
     smartSearchOpen,
     onToggleSmartSearch,
+    onOpenSettings,
   } = props;
 
   return (
@@ -197,6 +200,9 @@ export function Toolbar(props: ToolbarProps) {
         </button>
         <button className="icon-btn" onClick={onToggleTheme} title="Toggle theme">
           {theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}
+        </button>
+        <button className="icon-btn" onClick={onOpenSettings} title="Settings">
+          <Settings size={15} />
         </button>
       </div>
     </div>

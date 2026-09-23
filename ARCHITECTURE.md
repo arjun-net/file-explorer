@@ -1,14 +1,13 @@
 # Architecture
 
-Files is a desktop file explorer that's growing an **agentic search layer** on
-top of normal browsing: a background indexer that knows what's on disk, and
-(eventually) an LLM agent that can search that index the way a person would —
-by name, by metadata, by what's actually *in* a photo or video, and by
-deciding for itself which folders are worth looking in.
+Files is a desktop file explorer with an **agentic search layer** on top of
+normal browsing: a background indexer that knows what's on disk, and an LLM
+agent that searches it the way a person would — by name, by metadata, by
+what's actually *in* a photo or video, deciding for itself which folders are
+worth looking in rather than scanning everything.
 
-This document describes what exists today and what the remaining phases look
-like. If you're picking this codebase up cold, read this before `src/` or
-`electron/`.
+This document describes how it's built. If you're picking this codebase up
+cold, read this before `src/` or `electron/`.
 
 ## The three processes
 
@@ -32,18 +31,19 @@ project makes:
 
 ```
 Renderer (React)
-   │  window.fileAPI.indexKeywordSearch(...) / indexVectorSearch(...)
+   │  window.fileAPI.indexKeywordSearch(...) / indexVectorSearch(...) / agentQuery(...)
    ▼
 preload.ts  ──ipcRenderer.invoke──▶  ipc.ts (main process)
                                           │
-                                          ▼
-                                   SearchIndex (electron/indexer/index.ts)
-                                    ├─ IndexerController ──spawns──▶ walker.worker.ts ──▶ SQLite
-                                    │                                      │ (on 'done', chains into ↓)
-                                    ├─ EmbeddingController ──spawns──▶ embed.worker.ts ──▶ SQLite
+                                          ├────────────────────────────────────────┐
+                                          ▼                                        ▼
+                                   SearchIndex (electron/indexer/index.ts)   runAgent (electron/agent/agentLoop.ts)
+                                    ├─ IndexerController ──spawns──▶ walker.worker.ts ──▶ SQLite       │ tool_use loop against
+                                    │                                      │ (on 'done', chains into ↓)│ the Anthropic API,
+                                    ├─ EmbeddingController ──spawns──▶ embed.worker.ts ──▶ SQLite       │ dispatched via
                                     │                                      │ uses embeddings.ts (CLIP) + video.ts (ffmpeg)
-                                    ├─ IndexWatcher (chokidar) ──▶ incremental.ts ──▶ SQLite
-                                    └─ tools.ts (read queries, incl. vectorSearch) ──▶ SQLite
+                                    ├─ IndexWatcher (chokidar) ──▶ incremental.ts ──▶ SQLite            │
+                                    └─ tools.ts (read queries, incl. vectorSearch) ──▶ SQLite  ◀────────┘ electron/agent/tools.ts
 ```
 
 ## The index: what's built (Phase 1)
@@ -183,14 +183,18 @@ single best-matching row per file before being returned.
 ## The UI today
 
 A toolbar button (database icon) opens **Indexed Search**
-(`src/components/SmartSearchPanel.tsx`) with two modes: **Name** (FTS5
-keyword search) and **Content** (CLIP vector search, once a folder's media
-has finished embedding — the header shows live progress for both the
-metadata scan and the embedding pass). Clicking a result navigates the
-normal file browser there.
+(`src/components/SmartSearchPanel.tsx`) with three modes:
 
-This is explicitly a placeholder for the agent, not the final feature — see
-Phase 3.
+- **Ask** — the agent. Type a plain-language description, watch it decide
+  live which tools to call and why, get back a summary and a ranked list of
+  files.
+- **Name** — direct FTS5 keyword search, no LLM involved.
+- **Content** — direct CLIP vector search, no LLM involved.
+
+Name and Content aren't legacy — they're the same tools the agent uses,
+just invoked by hand. They stay useful (instant, free, no API key needed)
+for when you already know exactly what you want and don't need something
+deciding how to search on your behalf.
 
 ## Roadmap
 
@@ -200,16 +204,53 @@ EXIF capture, UI to drive it.
 **Phase 2 — done.** CLIP embeddings for images and sampled video keyframes,
 `sqlite-vec` vector search, content-based search UI.
 
-**Phase 3 — the agent (not yet built, needs your input).** An LLM
-tool-calling loop that takes a natural-language query, gets the tools in
-`tools.ts` (keyword, metadata, vector, and directory-rollup search), and
-decides for itself how to search — best-first over the folder tree, pruning
-subtrees via rollups, switching between keyword/vector search per query —
-which is what turns "type into one of two search boxes" into "describe what
-you're looking for." Provider is decided: **Anthropic**. Still needed: an
-API key (the app can't reuse your Claude Code subscription — that's a
-separate credential) and a decision on where it's stored (a settings field
-in the app vs. an environment variable).
+**Phase 3 — done, pending your API key.** The actual agent.
+
+## The agent (Phase 3)
+
+`electron/agent/` is two files:
+
+- **`tools.ts`** — `AGENT_TOOLS`, the Anthropic tool-use schema for
+  `keyword_search`, `content_search`, `metadata_search`,
+  `list_subdir_rollups`, and `get_dir_rollup` (a direct 1:1 mapping onto
+  `electron/indexer/tools.ts`), plus one more: `report_results`. That last
+  one isn't a real search tool — it's the loop's *terminal* tool, which the
+  agent is instructed to call exactly once to hand back a structured
+  `{summary, files}` answer instead of free text, so the UI has something
+  reliable to render rather than trying to parse prose.
+- **`agentLoop.ts`** — `runAgent(apiKey, query, currentPath, index, onStep)`.
+  A standard tool-calling loop against the Anthropic Messages API (model:
+  `claude-sonnet-5`, capped at 10 iterations): send the conversation, execute
+  every `tool_use` block the model asks for via `executeTool`, feed the
+  results back as `tool_result` blocks, repeat until `report_results` is
+  called (or the iteration cap is hit, or the API call itself fails). Every
+  step — each tool call, each tool result, any interim text, the final
+  answer, any error — is reported through the `onStep` callback as it
+  happens, not just returned at the end, which is what lets the UI show a
+  live transcript instead of a spinner.
+
+The system prompt tells the agent what's currently indexed and nudges it
+toward the `list_subdir_rollups` best-first pattern from Phase 1 rather than
+brute-force searching everything — but nothing stops it from just calling
+`keyword_search` or `content_search` directly when that's the better fit for
+the query. Which tool(s) to use, and in what order, is entirely the model's
+call.
+
+**The API key** never round-trips to the renderer once set. `electron/
+settings.ts` (`SettingsStore`) encrypts it via Electron's `safeStorage`
+(OS-keychain-backed — Keychain on macOS, DPAPI on Windows, libsecret on
+Linux) before writing it to `userData/secrets.enc`; the IPC surface
+(`settings:setApiKey` / `hasApiKey` / `clearApiKey`) only ever exposes
+*whether* a key is configured, never the key itself. Set it via the gear
+icon in the toolbar.
+
+**Verified without a real key:** the `safeStorage` encrypt/decrypt round-trip
+(works on this machine), and the full request path against Anthropic's real
+API with an intentionally invalid key — it reached the server, got a clean
+`401 authentication_error` back, and the loop turned that into a proper
+`{type: "error"}` step rather than crashing or hanging. That confirms the
+SDK wiring, model id, and request shape are all correct; the only thing
+untested is a *successful* tool-calling run, which needs a real key.
 
 ## Developing
 

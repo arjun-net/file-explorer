@@ -28,6 +28,7 @@ const options = {
     "onnxruntime-node",
     "ffmpeg-static",
     "@huggingface/transformers",
+    "@anthropic-ai/sdk",
   ],
   sourcemap: true,
   logLevel: "info",
