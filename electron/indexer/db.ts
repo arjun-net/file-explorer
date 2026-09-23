@@ -111,9 +111,24 @@ export function getDefaultDbPath(userDataDir: string): string {
   return path.join(userDataDir, "index.sqlite3");
 }
 
+/**
+ * sqlite-vec locates its native .dylib/.so/.dll via require.resolve(), which
+ * — inside a packaged, asar-archived app — still reports a path under
+ * `app.asar/...` even for files electron-builder physically unpacked to
+ * `app.asar.unpacked/...` (that automatic packed→unpacked redirection is a
+ * Node require()/fs trick; it doesn't apply to a raw path string handed to
+ * a native dlopen() call, which is what loading a SQLite extension is).
+ * Redirect manually so this works both in dev (no asar involved, no-op) and
+ * in the packaged app.
+ */
+function resolveExtensionPath(): string {
+  const resolved = sqliteVec.getLoadablePath();
+  return resolved.replace(/\.asar([\\/])/, ".asar.unpacked$1");
+}
+
 export function openDatabase(dbPath: string): Database.Database {
   const db = new Database(dbPath);
-  sqliteVec.load(db);
+  db.loadExtension(resolveExtensionPath());
   migrate(db);
   return db;
 }

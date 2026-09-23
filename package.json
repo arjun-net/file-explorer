@@ -4,7 +4,7 @@
   "description": "An agentic file explorer: browse normally, or describe what you're looking for and let an LLM agent search by name, metadata, and photo/video content.",
   "author": "arjun2",
   "private": true,
-  "version": "2.0.0",
+  "version": "2.0.1",
   "type": "module",
   "main": "dist-electron/main.cjs",
   "scripts": {
@@ -59,6 +59,9 @@
       "dist-electron/**/*",
       "node_modules/**/*",
       "package.json"
+    ],
+    "asarUnpack": [
+      "node_modules/sqlite-vec-*/**/*"
     ],
     "mac": {
       "category": "public.app-category.utilities",
