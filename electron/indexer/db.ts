@@ -132,3 +132,34 @@ export function openDatabase(dbPath: string): Database.Database {
   migrate(db);
   return db;
 }
+
+/**
+ * Returns a function that removes one entry and, if it was a directory,
+ * everything beneath it (files, rollups, and CLIP vectors). Deleting only the
+ * single `files` row would leave a removed folder's whole subtree searchable.
+ *
+ * Descendants are matched as the path range ["<dir>/", "<dir>0") — '0' is the
+ * character right after '/', so this is a fast indexed prefix scan with no LIKE
+ * wildcard escaping to worry about.
+ */
+export function prepareRemoveEntry(db: Database.Database): (parentDir: string, name: string) => void {
+  const deleteVectors = db.prepare(`
+    DELETE FROM embeddings WHERE rowid IN (
+      SELECT vec_rowid FROM embedding_meta WHERE file_id IN (
+        SELECT id FROM files WHERE path = @full OR (path >= @lo AND path < @hi)
+      )
+    )
+  `);
+  const deleteFiles = db.prepare(`DELETE FROM files WHERE path = @full OR (path >= @lo AND path < @hi)`);
+  const deleteRollups = db.prepare(`DELETE FROM dir_rollups WHERE dir_path = @full OR (dir_path >= @lo AND dir_path < @hi)`);
+
+  return (parentDir, name) => {
+    const full = path.join(parentDir, name);
+    const range = { full, lo: full + "/", hi: full + "0" };
+    db.transaction(() => {
+      deleteVectors.run(range);
+      deleteFiles.run(range);
+      deleteRollups.run(range);
+    })();
+  };
+}

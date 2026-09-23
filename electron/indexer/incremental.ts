@@ -2,6 +2,8 @@ import type Database from "better-sqlite3";
 import fs from "node:fs/promises";
 import path from "node:path";
 import exifr from "exifr";
+import { isIgnoredEntry } from "./ignore";
+import { prepareRemoveEntry } from "./db";
 
 const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "heic", "tiff", "webp"]);
 
@@ -21,7 +23,7 @@ export async function rescanDirectory(db: Database.Database, dir: string): Promi
   `);
   const findFileId = db.prepare(`SELECT id FROM files WHERE path = ?`);
   const listChildren = db.prepare(`SELECT name FROM files WHERE parent_dir = ?`);
-  const deleteChild = db.prepare(`DELETE FROM files WHERE parent_dir = ? AND name = ?`);
+  const removeEntry = prepareRemoveEntry(db);
   const upsertRollup = db.prepare(`
     INSERT INTO dir_rollups (dir_path, file_count, dir_count, total_size, top_extensions, max_mtime, updated_at)
     VALUES (@dir_path, @file_count, @dir_count, @total_size, @top_extensions, @max_mtime, @updated_at)
@@ -44,7 +46,7 @@ export async function rescanDirectory(db: Database.Database, dir: string): Promi
   } catch {
     // Directory vanished (deleted). Drop everything we had for it.
     const existing = listChildren.all(dir) as { name: string }[];
-    for (const child of existing) deleteChild.run(dir, child.name);
+    for (const child of existing) removeEntry(dir, child.name);
     db.prepare(`DELETE FROM dir_rollups WHERE dir_path = ?`).run(dir);
     return;
   }
@@ -57,7 +59,7 @@ export async function rescanDirectory(db: Database.Database, dir: string): Promi
   const extCounts: Record<string, number> = {};
 
   for (const entry of entries) {
-    if (entry.name.startsWith(".")) continue;
+    if (isIgnoredEntry(dir, entry.name)) continue;
     const full = path.join(dir, entry.name);
     seenNames.add(entry.name);
 
@@ -122,7 +124,7 @@ export async function rescanDirectory(db: Database.Database, dir: string): Promi
 
   const existing = listChildren.all(dir) as { name: string }[];
   for (const child of existing) {
-    if (!seenNames.has(child.name)) deleteChild.run(dir, child.name);
+    if (!seenNames.has(child.name)) removeEntry(dir, child.name);
   }
 
   upsertRollup.run({

@@ -207,7 +207,7 @@ export function SmartSearchPanel({ currentPath, onNavigateToResult }: SmartSearc
               : embedding
                 ? `Analyzing image/video content… ${embedStatus?.processed ?? 0}/${embedStatus?.total ?? 0}`
                 : stats && stats.indexedRoots.length > 0
-                  ? `${stats.totalFiles.toLocaleString()} files indexed across ${stats.indexedRoots.length} location${stats.indexedRoots.length === 1 ? "" : "s"} (${formatBytes(stats.totalSize)})`
+                  ? `${stats.totalFiles.toLocaleString()} files indexed across ${stats.indexedRoots.length} location${stats.indexedRoots.length === 1 ? "" : "s"} · ${formatBytes(stats.totalSize)} of files`
                   : "Nothing indexed yet"}
           </div>
         </div>

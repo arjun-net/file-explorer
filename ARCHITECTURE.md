@@ -108,6 +108,16 @@ currentPath}`), not per-file, so a fast SSD scan doesn't flood IPC.
 
 ### Keeping it current (`watcher.ts` + `incremental.ts`)
 
+### What gets skipped
+
+`ignore.ts` is the single source of truth for what stays out of the index,
+shared by the walker, the incremental rescan and the watcher: hidden
+dotfiles/folders, `node_modules`, `__pycache__`, `Pods`, and `~/Library`.
+Indexing a home folder otherwise spends most of its time on dependency trees
+and app caches. When an entry disappears (deleted, or newly ignored) its whole
+subtree — files, rollups and CLIP vectors — is removed via `prepareRemoveEntry()`
+in `db.ts`, so nothing stale stays searchable.
+
 A full re-walk on every filesystem change would be wasteful. Instead,
 a native recursive `fs.watch` (a single FSEvents stream on macOS, so large trees don't hit EMFILE) watches each indexed root, and any change (add/remove/modify) is
 debounced per-directory (500ms, coalescing bursts like "copied in 200

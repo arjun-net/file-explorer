@@ -2,13 +2,9 @@ import type Database from "better-sqlite3";
 import fs from "node:fs";
 import path from "node:path";
 import { rescanDirectory } from "./incremental";
+import { isIgnoredPath } from "./ignore";
 
 const DEBOUNCE_MS = 500;
-
-/** True if any path segment is hidden (dotfile/dotdir), which the walker also skips. */
-function isHidden(relativePath: string): boolean {
-  return relativePath.split(path.sep).some((segment) => segment.startsWith("."));
-}
 
 /**
  * Watches an indexed root for changes and keeps the index current by
@@ -50,9 +46,9 @@ export class IndexWatcher {
     try {
       this.watcher = fs.watch(rootPath, { recursive: true }, (_event, filename) => {
         if (!filename) return;
-        const relative = filename.toString();
-        if (isHidden(relative)) return;
-        scheduleRescan(path.dirname(path.join(rootPath, relative)));
+        const changed = path.join(rootPath, filename.toString());
+        if (isIgnoredPath(changed)) return;
+        scheduleRescan(path.dirname(changed));
       });
       // Live updates are a nice-to-have; a watcher failure must never take
       // down the app. The index simply stays as of the last scan.

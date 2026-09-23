@@ -2,7 +2,8 @@ import { parentPort, workerData } from "node:worker_threads";
 import fs from "node:fs/promises";
 import path from "node:path";
 import exifr from "exifr";
-import { openDatabase } from "./db";
+import { openDatabase, prepareRemoveEntry } from "./db";
+import { isIgnoredEntry } from "./ignore";
 
 interface WorkerData {
   rootPath: string;
@@ -26,7 +27,7 @@ const upsertFile = db.prepare(`
 
 const findFileId = db.prepare(`SELECT id FROM files WHERE path = ?`);
 const listChildren = db.prepare(`SELECT name FROM files WHERE parent_dir = ?`);
-const deleteChild = db.prepare(`DELETE FROM files WHERE parent_dir = ? AND name = ?`);
+const removeEntry = prepareRemoveEntry(db);
 
 const upsertRollup = db.prepare(`
   INSERT INTO dir_rollups (dir_path, file_count, dir_count, total_size, top_extensions, max_mtime, updated_at)
@@ -89,7 +90,7 @@ async function walk(dir: string, depth: number): Promise<{ fileCount: number; di
   const seenNames = new Set<string>();
 
   for (const entry of entries) {
-    if (entry.name.startsWith(".")) continue;
+    if (isIgnoredEntry(dir, entry.name)) continue;
     const full = path.join(dir, entry.name);
     seenNames.add(entry.name);
 
@@ -143,7 +144,7 @@ async function walk(dir: string, depth: number): Promise<{ fileCount: number; di
   // Anything previously recorded under `dir` that we didn't see this pass is gone.
   const existing = listChildren.all(dir) as { name: string }[];
   for (const child of existing) {
-    if (!seenNames.has(child.name)) deleteChild.run(dir, child.name);
+    if (!seenNames.has(child.name)) removeEntry(dir, child.name);
   }
 
   upsertRollup.run({
