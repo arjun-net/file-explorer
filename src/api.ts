@@ -4,10 +4,13 @@ import type {
   QuickAccessEntry,
   SearchResult,
   IndexStatus,
+  EmbedStatus,
   IndexedFile,
   DirRollup,
   KeywordSearchParams,
   MetadataSearchParams,
+  VectorSearchParams,
+  VectorSearchResult,
   IndexStats,
 } from "../shared/types";
 
@@ -17,10 +20,13 @@ export type {
   QuickAccessEntry,
   SearchResult,
   IndexStatus,
+  EmbedStatus,
   IndexedFile,
   DirRollup,
   KeywordSearchParams,
   MetadataSearchParams,
+  VectorSearchParams,
+  VectorSearchResult,
   IndexStats,
 };
 
@@ -61,9 +67,12 @@ export interface FileAPI {
   indexGetStats(): Promise<IndexStats>;
   indexKeywordSearch(params: KeywordSearchParams): Promise<IndexedFile[]>;
   indexMetadataSearch(params: MetadataSearchParams): Promise<IndexedFile[]>;
+  indexVectorSearch(params: VectorSearchParams): Promise<VectorSearchResult[]>;
   indexGetDirRollup(dirPath: string): Promise<DirRollup | null>;
   indexListSubdirRollups(dirPath: string): Promise<DirRollup[]>;
+  indexGetEmbedStatus(): Promise<EmbedStatus>;
   onIndexStatusChanged(cb: (status: IndexStatus) => void): () => void;
+  onIndexEmbedStatusChanged(cb: (status: EmbedStatus) => void): () => void;
 }
 
 declare global {

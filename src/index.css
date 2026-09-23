@@ -466,6 +466,39 @@ button {
   animation: spin 1s linear infinite;
 }
 
+.smart-search-mode {
+  display: flex;
+  gap: 4px;
+  margin: 12px 16px 0;
+  background: var(--bg-input);
+  border-radius: 8px;
+  padding: 3px;
+}
+
+.smart-search-mode button {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 5px 0;
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.smart-search-mode button.active {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+}
+
+.smart-search-frame-badge {
+  margin-left: 6px;
+  color: var(--accent);
+  font-weight: 500;
+}
+
 .smart-search-box {
   display: flex;
   align-items: center;

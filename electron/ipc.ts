@@ -16,7 +16,7 @@ import {
 } from "./fsUtils";
 import { runSearch, cancelSearch } from "./search";
 import type { SearchIndex } from "./indexer";
-import type { KeywordSearchParams, MetadataSearchParams } from "./indexer/tools";
+import type { KeywordSearchParams, MetadataSearchParams, VectorSearchParams } from "./indexer/tools";
 
 const watchers = new Map<number, fssync.FSWatcher>();
 
@@ -135,8 +135,10 @@ export function registerIpcHandlers(searchIndex: SearchIndex) {
   ipcMain.handle("index:getStats", () => searchIndex.getStats());
   ipcMain.handle("index:keywordSearch", (_e, params: KeywordSearchParams) => searchIndex.keywordSearch(params));
   ipcMain.handle("index:metadataSearch", (_e, params: MetadataSearchParams) => searchIndex.metadataSearch(params));
+  ipcMain.handle("index:vectorSearch", (_e, params: VectorSearchParams) => searchIndex.vectorSearch(params));
   ipcMain.handle("index:getDirRollup", (_e, dirPath: string) => searchIndex.getDirRollup(dirPath));
   ipcMain.handle("index:listSubdirRollups", (_e, dirPath: string) => searchIndex.listSubdirRollups(dirPath));
+  ipcMain.handle("index:getEmbedStatus", () => searchIndex.getEmbedStatus());
 }
 
 export function cleanupWatchers(winId: number) {

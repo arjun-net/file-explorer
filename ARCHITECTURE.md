@@ -24,18 +24,26 @@ project makes:
   `worker_thread`, spawned by the main process. Does the actual disk-walking
   and metadata extraction off the UI thread, so scanning a large drive
   doesn't make the app janky.
+- **Embedding worker** (`electron/indexer/embed.worker.ts`) — a second,
+  separate `worker_thread` that runs CLIP inference over images/video
+  keyframes. Kept apart from the walker on purpose: the metadata walk is
+  fast and should finish quickly; embedding is much slower model inference
+  and shouldn't hold up basic keyword search from becoming available.
 
 ```
 Renderer (React)
-   │  window.fileAPI.indexKeywordSearch(...)
+   │  window.fileAPI.indexKeywordSearch(...) / indexVectorSearch(...)
    ▼
 preload.ts  ──ipcRenderer.invoke──▶  ipc.ts (main process)
                                           │
                                           ▼
                                    SearchIndex (electron/indexer/index.ts)
                                     ├─ IndexerController ──spawns──▶ walker.worker.ts ──▶ SQLite
+                                    │                                      │ (on 'done', chains into ↓)
+                                    ├─ EmbeddingController ──spawns──▶ embed.worker.ts ──▶ SQLite
+                                    │                                      │ uses embeddings.ts (CLIP) + video.ts (ffmpeg)
                                     ├─ IndexWatcher (chokidar) ──▶ incremental.ts ──▶ SQLite
-                                    └─ tools.ts (read queries) ──▶ SQLite
+                                    └─ tools.ts (read queries, incl. vectorSearch) ──▶ SQLite
 ```
 
 ## The index: what's built (Phase 1)
@@ -56,6 +64,8 @@ mode so the worker can write while the renderer reads):
 | `exif` | Optional 1:1 metadata for images — capture date, camera, GPS, dimensions. Populated by `exifr` (pure JS, no native dependency). |
 | `dir_rollups` | One row per directory: file/dir counts, total size, and an extension histogram — **for that directory's direct children only, not recursive.** |
 | `index_roots` | Top-level folders the user has asked to index. |
+| `embeddings` | A `sqlite-vec` `vec0` table of 512-dim CLIP embeddings — one row per image, one row per sampled video keyframe. |
+| `embedding_meta` | Which file/frame each `embeddings` row belongs to (`vec0` tables can't carry extra columns well, so this is a normal table joined by rowid), plus the file's mtime at embedding time so a changed file's stale embedding gets detected and redone. |
 
 ### Why `dir_rollups` is the interesting table
 
@@ -122,36 +132,84 @@ They're plain functions over a `better-sqlite3` handle — deliberately not
 classes or stateful objects, so they're easy to hand to an LLM tool-calling
 loop as-is later.
 
+## Content search: what's built (Phase 2)
+
+The point of this phase, straight from the project brief: a query like
+**"white goose video" should match what's in the file, not its name.**
+Verified working end-to-end against files named `IMG_0001.jpg` etc. — see
+the commit that added this for the exact test.
+
+### The model (`embeddings.ts`)
+
+CLIP ViT-B/32 (quantized, ~150MB total) via
+[`@huggingface/transformers`](https://github.com/huggingface/transformers.js),
+running fully locally through `onnxruntime-node` — the only network access
+is the one-time model download on first use, cached under
+`app.getPath("userData")/models`. That library was a deliberate choice over
+hand-rolling ONNX calls: it already implements the CLIP tokenizer and image
+preprocessing correctly, which is easy to get subtly wrong from scratch.
+
+Images and text queries land in the *same* 512-dim embedding space. Every
+vector is L2-normalized before storage, so plain Euclidean distance (what
+`sqlite-vec`'s `vec0` uses by default) ranks results identically to cosine
+similarity would — no custom distance metric needed.
+
+### Video (`video.ts`)
+
+`ffmpeg-static` (a bundled binary, no system ffmpeg required) samples one
+frame every 8 seconds, capped at 8 frames/video, via a single `fps=1/8`
+filter invocation — no duration probing needed, ffmpeg just produces fewer
+frames for short videos. Each frame gets its own embedding row, so a search
+can match *when* something appears in a video, not just whether it does
+(the UI shows this as a "@34s" badge on video results).
+
+### The embedding worker (`embed.worker.ts`)
+
+Runs after the metadata walker finishes for a root (`SearchIndex` chains
+them in `index.ts`). Selects image/video files under that root whose newest
+`embedding_meta.file_mtime` doesn't match the file's current mtime —
+covering both "never embedded" and "changed since last embedded" — embeds
+only those, and deletes+replaces any of that file's old embedding rows
+first. Confirmed by test: re-running against an unchanged directory
+processes 0 files.
+
+### The tool (`tools.vectorSearch`)
+
+The one async function in `tools.ts` (everything else is a sync
+`better-sqlite3` call) — it has to embed the query text before it can query.
+A video can match on any one of its keyframes; results are deduped to the
+single best-matching row per file before being returned.
+
 ## The UI today
 
 A toolbar button (database icon) opens **Indexed Search**
-(`src/components/SmartSearchPanel.tsx`): index the current folder, watch scan
-progress live (`index:statusChanged` pushed from main to renderer), then
-search instantly. Clicking a result navigates the normal file browser there.
+(`src/components/SmartSearchPanel.tsx`) with two modes: **Name** (FTS5
+keyword search) and **Content** (CLIP vector search, once a folder's media
+has finished embedding — the header shows live progress for both the
+metadata scan and the embedding pass). Clicking a result navigates the
+normal file browser there.
 
 This is explicitly a placeholder for the agent, not the final feature — see
 Phase 3.
 
 ## Roadmap
 
-**Phase 1 — done.** Everything above: indexer, watcher, rollups, keyword/
-metadata search, EXIF capture, UI to drive it.
+**Phase 1 — done.** Indexer, watcher, rollups, keyword/metadata search,
+EXIF capture, UI to drive it.
 
-**Phase 2 — content-based media search (not yet built).** Embed images and
-sampled video keyframes with a CLIP model (ONNX Runtime) into a vector index
-(`sqlite-vec`), so a query like "white goose video" matches what's *in* the
-file, not its filename. Needs: `sharp` for image preprocessing, `ffmpeg` (or
-`ffmpeg-static`) for keyframe sampling, and downloading real CLIP ONNX
-weights. This is a meaningful chunk of new work on its own and hasn't been
-started.
+**Phase 2 — done.** CLIP embeddings for images and sampled video keyframes,
+`sqlite-vec` vector search, content-based search UI.
 
 **Phase 3 — the agent (not yet built, needs your input).** An LLM
 tool-calling loop that takes a natural-language query, gets the tools in
-`tools.ts` (plus vector search once Phase 2 lands), and decides for itself
-how to search — this is what turns "type a keyword" into "describe what
-you're looking for." This needs a provider/API key decision (Anthropic,
-OpenAI, something else, and where the key is stored) before it can be built,
-since the app can't invent credentials for you.
+`tools.ts` (keyword, metadata, vector, and directory-rollup search), and
+decides for itself how to search — best-first over the folder tree, pruning
+subtrees via rollups, switching between keyword/vector search per query —
+which is what turns "type into one of two search boxes" into "describe what
+you're looking for." Provider is decided: **Anthropic**. Still needed: an
+API key (the app can't reuse your Claude Code subscription — that's a
+separate credential) and a decision on where it's stored (a settings field
+in the app vs. an environment variable).
 
 ## Developing
 
@@ -167,3 +225,10 @@ npm run dist        # packaged .dmg/.zip via electron-builder
 If you ever see a `NODE_MODULE_VERSION` mismatch error mentioning
 `better-sqlite3`, it means the native binding is built for the wrong Node —
 run `npx electron-rebuild -f -w better-sqlite3`.
+
+The CLIP model (~150MB) is **not** downloaded by `npm install` — it downloads
+lazily the first time anything gets embedded (i.e. the first time a folder
+you index contains an image or video), and is cached under
+`app.getPath("userData")/models` from then on. `onnxruntime-node` and
+`sqlite-vec` ship prebuilt platform binaries via `optionalDependencies` and
+need no rebuild step of their own.

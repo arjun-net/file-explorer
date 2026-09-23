@@ -5,9 +5,20 @@ import type {
   KeywordSearchParams,
   MetadataSearchParams,
   IndexStats,
+  VectorSearchParams,
+  VectorSearchResult,
 } from "../../shared/types";
+import { embedText, toVecBuffer } from "./embeddings";
 
-export type { IndexedFile, DirRollup, KeywordSearchParams, MetadataSearchParams, IndexStats };
+export type {
+  IndexedFile,
+  DirRollup,
+  KeywordSearchParams,
+  MetadataSearchParams,
+  IndexStats,
+  VectorSearchParams,
+  VectorSearchResult,
+};
 
 interface FileRow {
   id: number;
@@ -149,6 +160,48 @@ export function listSubdirRollups(db: Database.Database, dirPath: string): DirRo
     if (rollup) rollups.push(rollup);
   }
   return rollups;
+}
+
+/**
+ * Content-based search: embeds `query` with the same CLIP text encoder used
+ * for images/video frames, then finds the nearest embeddings by (L2, on
+ * unit-normalized vectors, so equivalent to cosine similarity) distance.
+ * A video can match on any one of its sampled keyframes; results are
+ * deduped to one row per file, keeping the closest match.
+ */
+export async function vectorSearch(db: Database.Database, params: VectorSearchParams): Promise<VectorSearchResult[]> {
+  const queryVec = await embedText(params.query);
+  const fetchLimit = Math.min((params.limit ?? 30) * 4, 400); // over-fetch before per-file dedup
+  const rows = db
+    .prepare(
+      `SELECT f.*, em.kind AS matched_kind, em.frame_time AS matched_frame_time, e.distance AS distance
+       FROM embeddings e
+       JOIN embedding_meta em ON em.vec_rowid = e.rowid
+       JOIN files f ON f.id = em.file_id
+       WHERE e.embedding MATCH ? AND k = ? ${params.rootPath ? "AND f.path LIKE ? || '%'" : ""}
+       ORDER BY e.distance`
+    )
+    .all(
+      ...(params.rootPath ? [toVecBuffer(queryVec), fetchLimit, params.rootPath] : [toVecBuffer(queryVec), fetchLimit])
+    ) as (FileRow & { matched_kind: "image" | "video_frame"; matched_frame_time: number | null; distance: number })[];
+
+  const bestPerFile = new Map<number, (typeof rows)[number]>();
+  for (const row of rows) {
+    const existing = bestPerFile.get(row.id);
+    if (!existing || row.distance < existing.distance) bestPerFile.set(row.id, row);
+  }
+
+  const limit = Math.min(params.limit ?? 30, 200);
+  return [...bestPerFile.values()]
+    .sort((a, b) => a.distance - b.distance)
+    .slice(0, limit)
+    .map((row) => ({
+      ...toFile(row),
+      // Unit vectors: L2 distance^2 = 2 - 2*cosine_similarity.
+      similarity: 1 - (row.distance * row.distance) / 2,
+      matchedKind: row.matched_kind,
+      matchedFrameTime: row.matched_frame_time,
+    }));
 }
 
 export function getIndexStats(db: Database.Database): IndexStats {

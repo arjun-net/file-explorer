@@ -1,19 +1,27 @@
 import Database from "better-sqlite3";
 import fs from "node:fs";
 import path from "node:path";
+import * as sqliteVec from "sqlite-vec";
 
 /**
  * Schema overview
  * ----------------
- * files        — one row per file/directory ever seen, keyed by absolute path.
- * files_fts    — FTS5 shadow index over files.name/files.path for keyword search,
- *                kept in sync by triggers so callers never touch it directly.
- * exif         — optional per-image metadata (camera, GPS, capture time), 1:1 with files.
- * dir_rollups  — per-directory aggregate stats over that directory's *direct* children
- *                only (not recursive). This is what lets the search agent do a
- *                best-first walk: look at a folder's rollup, decide whether it's worth
- *                descending into, without opening every file inside it.
- * index_roots  — top-level folders the user has asked to index, plus scan bookkeeping.
+ * files          — one row per file/directory ever seen, keyed by absolute path.
+ * files_fts      — FTS5 shadow index over files.name/files.path for keyword search,
+ *                  kept in sync by triggers so callers never touch it directly.
+ * exif           — optional per-image metadata (camera, GPS, capture time), 1:1 with files.
+ * dir_rollups    — per-directory aggregate stats over that directory's *direct* children
+ *                  only (not recursive). This is what lets the search agent do a
+ *                  best-first walk: look at a folder's rollup, decide whether it's worth
+ *                  descending into, without opening every file inside it.
+ * index_roots    — top-level folders the user has asked to index, plus scan bookkeeping.
+ * embeddings     — a sqlite-vec vec0 table of 512-dim CLIP embeddings (image files get one
+ *                  row, videos get one row per sampled keyframe). Vector-only; everything
+ *                  else about the embedding lives in embedding_meta, joined by rowid,
+ *                  because vec0 tables don't carry arbitrary extra columns well.
+ * embedding_meta — which file/frame each embeddings row belongs to, and the file's mtime
+ *                  at embedding time (so a changed file's stale embedding can be detected
+ *                  and redone without re-embedding everything).
  */
 export function migrate(db: Database.Database): void {
   db.pragma("journal_mode = WAL");
@@ -83,7 +91,19 @@ export function migrate(db: Database.Database): void {
       last_full_scan_at INTEGER,
       status TEXT NOT NULL DEFAULT 'pending'
     );
+
+    CREATE TABLE IF NOT EXISTS embedding_meta (
+      vec_rowid INTEGER PRIMARY KEY,
+      file_id INTEGER NOT NULL REFERENCES files(id) ON DELETE CASCADE,
+      kind TEXT NOT NULL,
+      frame_time REAL,
+      file_mtime INTEGER NOT NULL,
+      created_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_embedding_meta_file ON embedding_meta(file_id);
   `);
+
+  db.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS embeddings USING vec0(embedding float[512])`);
 }
 
 export function getDefaultDbPath(userDataDir: string): string {
@@ -93,6 +113,7 @@ export function getDefaultDbPath(userDataDir: string): string {
 
 export function openDatabase(dbPath: string): Database.Database {
   const db = new Database(dbPath);
+  sqliteVec.load(db);
   migrate(db);
   return db;
 }

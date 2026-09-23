@@ -5,10 +5,13 @@ import type {
   QuickAccessEntry,
   SearchResult,
   IndexStatus,
+  EmbedStatus,
   IndexedFile,
   DirRollup,
   KeywordSearchParams,
   MetadataSearchParams,
+  VectorSearchParams,
+  VectorSearchResult,
   IndexStats,
 } from "../shared/types";
 
@@ -70,14 +73,22 @@ const api = {
     ipcRenderer.invoke("index:keywordSearch", params),
   indexMetadataSearch: (params: MetadataSearchParams): Promise<IndexedFile[]> =>
     ipcRenderer.invoke("index:metadataSearch", params),
+  indexVectorSearch: (params: VectorSearchParams): Promise<VectorSearchResult[]> =>
+    ipcRenderer.invoke("index:vectorSearch", params),
   indexGetDirRollup: (dirPath: string): Promise<DirRollup | null> =>
     ipcRenderer.invoke("index:getDirRollup", dirPath),
   indexListSubdirRollups: (dirPath: string): Promise<DirRollup[]> =>
     ipcRenderer.invoke("index:listSubdirRollups", dirPath),
+  indexGetEmbedStatus: (): Promise<EmbedStatus> => ipcRenderer.invoke("index:getEmbedStatus"),
   onIndexStatusChanged: (cb: (status: IndexStatus) => void) => {
     const listener = (_e: unknown, data: IndexStatus) => cb(data);
     ipcRenderer.on("index:statusChanged", listener);
     return () => ipcRenderer.removeListener("index:statusChanged", listener);
+  },
+  onIndexEmbedStatusChanged: (cb: (status: EmbedStatus) => void) => {
+    const listener = (_e: unknown, data: EmbedStatus) => cb(data);
+    ipcRenderer.on("index:embedStatusChanged", listener);
+    return () => ipcRenderer.removeListener("index:embedStatusChanged", listener);
   },
 };
 

@@ -87,3 +87,24 @@ export interface IndexStats {
   totalSize: number;
   indexedRoots: string[];
 }
+
+export interface VectorSearchParams {
+  query: string;
+  rootPath?: string;
+  limit?: number;
+}
+
+export interface VectorSearchResult extends IndexedFile {
+  similarity: number;
+  matchedKind: "image" | "video_frame";
+  matchedFrameTime: number | null;
+}
+
+export interface EmbedStatus {
+  state: "idle" | "embedding" | "done" | "error";
+  rootPath?: string;
+  processed: number;
+  total: number;
+  currentPath?: string;
+  error?: string;
+}

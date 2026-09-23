@@ -2,7 +2,7 @@ import { app, BrowserWindow, protocol, net, Menu } from "electron";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { registerIpcHandlers, cleanupWatchers } from "./ipc";
-import { SearchIndex, type IndexStatus } from "./indexer";
+import { SearchIndex, type IndexStatus, type EmbedStatus } from "./indexer";
 import { getDefaultDbPath } from "./indexer/db";
 
 const isDev = !!process.env.VITE_DEV_SERVER_URL;
@@ -90,9 +90,16 @@ app.whenReady().then(() => {
 
   const win = createWindow();
 
-  const searchIndex = new SearchIndex(getDefaultDbPath(app.getPath("userData")), (status: IndexStatus) => {
-    if (!win.isDestroyed()) win.webContents.send("index:statusChanged", status);
-  });
+  const searchIndex = new SearchIndex(
+    getDefaultDbPath(app.getPath("userData")),
+    path.join(app.getPath("userData"), "models"),
+    (status: IndexStatus) => {
+      if (!win.isDestroyed()) win.webContents.send("index:statusChanged", status);
+    },
+    (status: EmbedStatus) => {
+      if (!win.isDestroyed()) win.webContents.send("index:embedStatusChanged", status);
+    }
+  );
 
   registerIpcHandlers(searchIndex);
 
