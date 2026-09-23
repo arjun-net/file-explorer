@@ -21,7 +21,6 @@ const options = {
   external: [
     "electron",
     "better-sqlite3",
-    "chokidar",
     "exifr",
     "sqlite-vec",
     "sharp",

@@ -42,7 +42,7 @@ preload.ts  ──ipcRenderer.invoke──▶  ipc.ts (main process)
                                     │                                      │ (on 'done', chains into ↓)│ the Anthropic API,
                                     ├─ EmbeddingController ──spawns──▶ embed.worker.ts ──▶ SQLite       │ dispatched via
                                     │                                      │ uses embeddings.ts (CLIP) + video.ts (ffmpeg)
-                                    ├─ IndexWatcher (chokidar) ──▶ incremental.ts ──▶ SQLite            │
+                                    ├─ IndexWatcher (fs.watch) ──▶ incremental.ts ──▶ SQLite            │
                                     └─ tools.ts (read queries, incl. vectorSearch) ──▶ SQLite  ◀────────┘ electron/agent/tools.ts
 ```
 
@@ -109,7 +109,7 @@ currentPath}`), not per-file, so a fast SSD scan doesn't flood IPC.
 ### Keeping it current (`watcher.ts` + `incremental.ts`)
 
 A full re-walk on every filesystem change would be wasteful. Instead,
-`chokidar` watches each indexed root, and any change (add/remove/modify) is
+a native recursive `fs.watch` (a single FSEvents stream on macOS, so large trees don't hit EMFILE) watches each indexed root, and any change (add/remove/modify) is
 debounced per-directory (500ms, coalescing bursts like "copied in 200
 files") and handled by `rescanDirectory()` in `incremental.ts` — the same
 upsert/prune/rollup logic as the walker, just for one directory, non-
