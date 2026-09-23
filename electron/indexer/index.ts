@@ -3,6 +3,7 @@ import { openDatabase } from "./db";
 import { IndexerController, type IndexStatus } from "./indexerController";
 import { EmbeddingController, type EmbedStatus } from "./embeddingController";
 import { IndexWatcher } from "./watcher";
+import { configureModelCache } from "./embeddings";
 import * as tools from "./tools";
 
 export type { IndexStatus } from "./indexerController";
@@ -33,6 +34,9 @@ export class SearchIndex {
   ) {
     this.dbPath = dbPath;
     this.modelCacheDir = modelCacheDir;
+    // content_search embeds the query text on this (main) thread, so it needs the
+    // same writable model cache as the embed worker — the default is inside app.asar.
+    configureModelCache(modelCacheDir);
     this.db = openDatabase(dbPath);
     this.watcher = new IndexWatcher(this.db);
 
