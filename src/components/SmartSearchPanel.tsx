@@ -28,6 +28,7 @@ const TOOL_META: Record<string, { label: string; icon: typeof Search }> = {
   metadata_search: { label: "Filtering by size/type/date", icon: SlidersHorizontal },
   list_subdir_rollups: { label: "Checking subfolders", icon: FolderTree },
   get_dir_rollup: { label: "Checking folder", icon: Folder },
+  index_status: { label: "Checking the index", icon: Database },
 };
 
 function toolFocus(input: Record<string, unknown> | undefined): string {
@@ -255,8 +256,22 @@ export function SmartSearchPanel({ currentPath, onNavigateToResult }: SmartSearc
           <div className="smart-search-results">
             {askSteps.length === 0 ? (
               <div className="smart-search-empty">
-                Describe what you're looking for in plain language — the agent decides how to search (by name, by
-                content, by folder) on its own.
+                {!isIndexed && !scanning ? (
+                  <>
+                    <p>
+                      This folder isn't indexed yet, so there's nothing for the agent to search. Index it first (a
+                      few seconds for most folders).
+                    </p>
+                    <button
+                      className="smart-search-index-btn"
+                      onClick={() => window.fileAPI.indexAddRoot(currentPath)}
+                    >
+                      Index This Folder
+                    </button>
+                  </>
+                ) : (
+                  "Describe what you're looking for in plain language — the agent decides how to search (by name, by content, by folder) on its own."
+                )}
               </div>
             ) : (
               <div className="ask-transcript">

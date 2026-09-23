@@ -4,7 +4,7 @@
   "description": "An agentic file explorer: browse normally, or describe what you're looking for and let an LLM agent search by name, metadata, and photo/video content.",
   "author": "arjun2",
   "private": true,
-  "version": "2.1.0",
+  "version": "2.1.1",
   "type": "module",
   "main": "dist-electron/main.cjs",
   "scripts": {

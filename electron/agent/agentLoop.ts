@@ -19,7 +19,9 @@ Use the available tools to find files matching what the user describes:
 - metadata_search for size, type, or date-range constraints with no text query.
 - list_subdir_rollups / get_dir_rollup to check what a folder contains (file counts, size, extension mix) before searching inside it or its subfolders — prefer this over searching an entire large drive at once. Use it to do a best-first search: check rollups, decide which subfolders are plausible, and only look further into those.
 
-If nothing is indexed yet, or none of the indexed locations plausibly cover what the user described, say so plainly in your summary rather than guessing or inventing results.
+- index_status to report what's indexed (roots, file counts, total size) — use it for questions about the index itself.
+
+If nothing is indexed yet (tell the user to open Indexed Search and click "Index This Folder" on the folder they care about — you cannot index folders yourself), or none of the indexed locations plausibly cover what the user described, say so plainly in your summary rather than guessing or inventing results.
 
 You MUST finish by calling report_results exactly once — never answer in plain text alone.`;
 }

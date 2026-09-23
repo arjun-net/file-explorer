@@ -75,6 +75,12 @@ export const AGENT_TOOLS: Anthropic.Tool[] = [
     },
   },
   {
+    name: "index_status",
+    description:
+      "Report what has been indexed so far: which root folders, and total file/folder counts and size. Use this to answer questions about the index itself (\"how much is indexed?\") or to check whether a location is searchable before searching it.",
+    input_schema: { type: "object", properties: {} },
+  },
+  {
     name: "report_results",
     description:
       "Call this exactly once, when you're done searching, to report your findings to the user. Always call this to finish — never just answer in plain text.",
@@ -131,6 +137,10 @@ export async function executeTool(
     case "get_dir_rollup": {
       const result = index.getDirRollup(String(input.dirPath));
       return { result, preview: result ? "found" : "not indexed" };
+    }
+    case "index_status": {
+      const result = index.getStats();
+      return { result, preview: `${result.totalFiles.toLocaleString()} files in ${result.indexedRoots.length} root(s)` };
     }
     default:
       throw new Error(`Unknown tool: ${name}`);
